@@ -2,6 +2,8 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+
 // Register user
 const register = async (req, res) => {
   try {
@@ -14,10 +16,24 @@ const register = async (req, res) => {
       });
     }
 
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
     if (role && !["ORGANIZER", "CUSTOMER"].includes(role)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid role",
+        message: "Invalid role. Role must be ORGANIZER or CUSTOMER",
       });
     }
 
@@ -35,8 +51,8 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name,
-      email: email.toLowerCase(),
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       role: role || "CUSTOMER",
     });
@@ -56,7 +72,7 @@ const register = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error during registration",
     });
   }
 };
@@ -76,13 +92,13 @@ const login = async (req, res) => {
 
     // Find user
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
     });
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid email or password",
       });
     }
 
@@ -95,7 +111,7 @@ const login = async (req, res) => {
     if (!isPasswordCorrect) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid email or password",
       });
     }
 
@@ -127,7 +143,33 @@ const login = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error during login",
+    });
+  }
+};
+
+// Get current user profile
+const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Get profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error fetching user profile",
     });
   }
 };
@@ -135,4 +177,5 @@ const login = async (req, res) => {
 module.exports = {
   register,
   login,
+  getMe,
 };

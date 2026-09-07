@@ -4,6 +4,9 @@ const {
   createEvent,
   getEvents,
   getEventById,
+  getMyEvents,
+  updateEvent,
+  deleteEvent,
 } = require("../controllers/eventController");
 
 const {
@@ -15,15 +18,35 @@ const router = express.Router();
 
 // Public routes
 router.get("/", getEvents);
-
 router.get("/:id", getEventById);
 
-// Organizer route
+// Organizer routes
+router.get(
+  "/organizer/my-events",
+  protect,
+  authorize("ORGANIZER"),
+  getMyEvents
+);
+
 router.post(
   "/",
   protect,
   authorize("ORGANIZER"),
   createEvent
+);
+
+router.put(
+  "/:id",
+  protect,
+  authorize("ORGANIZER"),
+  updateEvent
+);
+
+router.delete(
+  "/:id",
+  protect,
+  authorize("ORGANIZER"),
+  deleteEvent
 );
 
 module.exports = router;
