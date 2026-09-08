@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 function Register() {
@@ -10,7 +11,9 @@ function Register() {
   });
 
   const [message, setMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({
@@ -24,16 +27,21 @@ function Register() {
 
     setLoading(true);
     setMessage("");
+    setIsSuccess(false);
 
     try {
       const response = await api.post("/auth/register", formData);
 
       console.log(response.data);
+      setIsSuccess(true);
+      setMessage("Registration successful! Redirecting to login...");
 
-      setMessage("Registration successful!");
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
     } catch (error) {
       console.error(error);
-
+      setIsSuccess(false);
       setMessage(
         error.response?.data?.message || "Registration failed"
       );
@@ -98,7 +106,7 @@ function Register() {
           {/* Password */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Password
+              Password (min. 6 characters)
             </label>
 
             <input
@@ -107,6 +115,7 @@ function Register() {
               placeholder="Create a password"
               value={formData.password}
               onChange={handleChange}
+              minLength={6}
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
@@ -143,7 +152,7 @@ function Register() {
         {message && (
           <div
             className={`mt-5 p-3 rounded-lg text-center text-sm ${
-              message === "Registration successful!"
+              isSuccess
                 ? "bg-green-50 text-green-700"
                 : "bg-red-50 text-red-700"
             }`}
@@ -155,9 +164,12 @@ function Register() {
         {/* Login */}
         <div className="text-center mt-6 text-sm text-gray-500">
           Already have an account?{" "}
-          <button className="text-indigo-600 font-semibold hover:underline">
+          <Link
+            to="/login"
+            className="text-indigo-600 font-semibold hover:underline"
+          >
             Login
-          </button>
+          </Link>
         </div>
       </div>
     </div>

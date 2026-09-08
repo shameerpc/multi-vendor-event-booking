@@ -12,7 +12,9 @@ const connectDB = async () => {
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
     if (error.message.includes("ECONNREFUSED")) {
-      console.error("-> Hint: Ensure local MongoDB service is running (net start MongoDB) or update MONGO_URI in .env to use MongoDB Atlas cloud URI.");
+      console.error("-> Hint: Ensure local MongoDB service is running (e.g. net start MongoDB or mongod) or update MONGO_URI in .env.");
+    } else if (error.message.includes("IP that isn't whitelisted") || error.message.includes("Could not connect to any servers")) {
+      console.error("-> Hint: Your IP address is not whitelisted in MongoDB Atlas. Go to Network Access in Atlas dashboard and add 0.0.0.0/0 (or your current IP).");
     }
     process.exit(1);
   }

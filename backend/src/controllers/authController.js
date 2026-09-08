@@ -67,12 +67,26 @@ const register = async (req, res) => {
         role: user.role,
       },
     });
-  } catch (error) {
+    } catch (error) {
     console.error("Register error:", error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Email address is already registered",
+      });
+    }
+
+    if (error.name === "MongooseError" || error.message?.includes("buffering timed out") || error.message?.includes("connect")) {
+      return res.status(503).json({
+        success: false,
+        message: "Database connection failed. Please whitelist your IP address in MongoDB Atlas Network Access.",
+      });
+    }
 
     return res.status(500).json({
       success: false,
-      message: "Server error during registration",
+      message: error.message || "Server error during registration",
     });
   }
 };
@@ -141,9 +155,16 @@ const login = async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
 
+    if (error.name === "MongooseError" || error.message?.includes("buffering timed out") || error.message?.includes("connect")) {
+      return res.status(503).json({
+        success: false,
+        message: "Database connection failed. Please whitelist your IP address in MongoDB Atlas Network Access.",
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message: "Server error during login",
+      message: error.message || "Server error during login",
     });
   }
 };
@@ -169,7 +190,7 @@ const getMe = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server error fetching user profile",
+      message: error.message || "Server error fetching user profile",
     });
   }
 };
