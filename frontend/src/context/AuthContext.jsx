@@ -1,35 +1,38 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
+
+// Restore the session synchronously so a page refresh keeps the user logged in
+// instead of flashing/redirecting to login on the very first render.
+function getStoredSession() {
+  try {
+    const storedToken = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+    if (storedToken && storedUser) {
+      return { token: storedToken, user: JSON.parse(storedUser) };
+    }
+  } catch (error) {
+    console.error("Failed to restore session:", error);
+  }
+  return { token: null, user: null };
+}
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const [session, setSession] = useState(getStoredSession);
+  const { token, user } = session;
 
   const login = (token, user) => {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(user));
 
-    setToken(token);
-    setUser(user);
+    setSession({ token, user });
   };
 
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
-    setToken(null);
-    setUser(null);
+    setSession({ token: null, user: null });
   };
 
   return (

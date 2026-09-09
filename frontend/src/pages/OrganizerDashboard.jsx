@@ -44,7 +44,7 @@ function parseDateTime(value) {
   const date = new Date(trimmed);
   if (!isNaN(date.getTime())) return date;
 
-  const match = trimmed.match(/^(\d{1,4})[-\/.](\d{1,2})[-\/.](\d{1,4})(?:[T\s]+(\d{1,2}):(\d{2}))?/);
+  const match = trimmed.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})(?:[T\s]+(\d{1,2}):(\d{2}))?/);
   if (!match) return null;
 
   const [, a, b, c, hh = "0", mm = "0"] = match;
@@ -265,15 +265,26 @@ function OrganizerDashboard() {
     }
   };
 
-  const handleDeleteEvent = async (eventId, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) return;
+  const [deletingId, setDeletingId] = useState(null);
+
+  const confirmDelete = (event) => {
+    setDeletingId(event);
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!deletingId) return;
+    setSubmitting(true);
     try {
-      await api.delete(`/events/${eventId}`);
+      await api.delete(`/events/${deletingId._id}`);
       showToast("Event deleted successfully!", "success");
+      setDeletingId(null);
       fetchMyEvents();
     } catch (err) {
       console.error(err);
       showToast(err.response?.data?.message || "Failed to delete event", "error");
+      setDeletingId(null);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -538,7 +549,7 @@ function OrganizerDashboard() {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeleteEvent(event._id, event.title)}
+                      onClick={() => confirmDelete(event)}
                       className="flex-1 px-3 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-semibold transition flex items-center justify-center gap-1.5"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -591,16 +602,55 @@ function OrganizerDashboard() {
           />
         </Modal>
       )}
+
+      {/* ══════════ DELETE CONFIRMATION MODAL ══════════ */}
+      {deletingId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-50 py-8">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl animate-scale-in">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-rose-100 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Delete Event?</h3>
+              <p className="text-gray-500 text-sm mt-2">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-gray-700">"{deletingId.title}"</span>? This
+                action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setDeletingId(null)}
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-gray-600 text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteEvent}
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-sm font-bold transition shadow-md shadow-rose-200"
+              >
+                {submitting ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ─────────── Shared Modal Shell ─────────── */
+/* ─────────── Shared Modal Shell (scrollable, sticky header) ─────────── */
 function Modal({ title, subtitle, icon, onClose, children }) {
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-50 overflow-y-auto py-8">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden animate-scale-in">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-50 py-6 sm:py-10">
+      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col max-h-[92vh] animate-scale-in">
+        <div className="shrink-0 bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5 flex items-center justify-between rounded-t-3xl">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{icon}</span>
             <div>
@@ -617,126 +667,264 @@ function Modal({ title, subtitle, icon, onClose, children }) {
             </svg>
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="modal-scroll overflow-y-auto p-6">{children}</div>
       </div>
     </div>
   );
 }
 
-/* ─────────── Reusable Event Form ─────────── */
+/* Icon wrapper for inputs */
+function InputIcon({ children }) {
+  return (
+    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+      {children}
+    </span>
+  );
+}
+
+/* ─────────── Reusable Event Form (modern, interactive, scrollable) ─────────── */
 function EventForm({ formData, onChange, onSubmit, submitting, submitLabel, onCancel }) {
   const inputClass =
-    "w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm";
+    "w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm";
   const labelClass = "block text-sm font-semibold text-gray-700 mb-1.5";
 
+  const parsedDate = parseDateTime(formData.date);
+  const dateValid = parsedDate && parsedDate > new Date();
+
+  const price = Number(formData.ticketPrice) || 0;
+  const tickets = Number(formData.totalTickets) || 0;
+  const revenue = price > 0 && tickets > 0 ? price * tickets : 0;
+
+  const meta = CATEGORY_META[formData.category] || CATEGORY_META.Other;
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label className={labelClass}>Event Title</label>
-        <input
-          type="text"
-          name="title"
-          placeholder="e.g. Tech Conference 2026"
-          value={formData.title}
-          onChange={onChange}
-          required
-          className={inputClass}
-        />
-      </div>
-
-      <div>
-        <label className={labelClass}>Description</label>
-        <textarea
-          name="description"
-          rows="3"
-          placeholder="Describe what attendees can expect..."
-          value={formData.description}
-          onChange={onChange}
-          required
-          className={`${inputClass} resize-none`}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Category</label>
-          <select
-            name="category"
-            value={formData.category}
-            onChange={onChange}
-            className={`${inputClass} bg-white`}
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+    <form onSubmit={onSubmit} className="space-y-6">
+      {/* ═══ Live Preview ═══ */}
+      <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className={`relative h-16 flex items-center justify-center bg-gradient-to-r ${meta.gradient}`}>
+          <span className="text-3xl drop-shadow">{meta.icon}</span>
+          <span className="absolute top-2 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/25 text-white backdrop-blur-sm">
+            {formData.category}
+          </span>
         </div>
-        <div>
-          <label className={labelClass}>Date &amp; Time</label>
-          <input
-            type="datetime-local"
-            name="date"
-            value={formData.date}
-            onChange={onChange}
-            min={nowLocalMin()}
-            required
-            className={inputClass}
-          />
-          <p className="text-[11px] text-gray-400 mt-1">
-            Pick from the calendar or type as <span className="font-medium text-gray-500">13-09-2026 10:00</span> — must be in the future.
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className={`font-bold ${formData.title ? "text-gray-900" : "text-gray-400"}`}>
+              {formData.title || "Your event title"}
+            </h4>
+            {revenue > 0 && (
+              <span className="shrink-0 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">
+                Revenue ₹{revenue.toLocaleString("en-IN")}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
+            {parsedDate && dateValid
+              ? `📅 ${parsedDate.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+              : "📅 Pick a future date"}
+            <span className="mx-1">·</span>
+            {formData.location ? `📍 ${formData.location}` : "📍 Add a location"}
           </p>
+          {parsedDate && !dateValid && (
+            <p className="text-[11px] font-medium text-rose-500 mt-1">Event date must be in the future.</p>
+          )}
         </div>
       </div>
 
+      {/* ═══ Event Details ═══ */}
       <div>
-        <label className={labelClass}>Location</label>
-        <input
-          type="text"
-          name="location"
-          placeholder="Venue / city"
-          value={formData.location}
-          onChange={onChange}
-          required
-          className={inputClass}
-        />
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm">🎪</span>
+          <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Event Details</h4>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className={labelClass}>Event Title</label>
+            <div className="relative">
+              <InputIcon>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </InputIcon>
+              <input
+                type="text"
+                name="title"
+                placeholder="e.g. Tech Conference 2026"
+                value={formData.title}
+                onChange={onChange}
+                required
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Description</label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-3 text-gray-400 pointer-events-none">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+              </span>
+              <textarea
+                name="description"
+                rows="3"
+                placeholder="Describe what attendees can expect..."
+                value={formData.description}
+                onChange={onChange}
+                required
+                className={`${inputClass} resize-none`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Category</label>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              {CATEGORIES.map((cat) => {
+                const m = CATEGORY_META[cat] || CATEGORY_META.Other;
+                const active = formData.category === cat;
+                return (
+                  <button
+                    type="button"
+                    key={cat}
+                    onClick={() => onChange({ target: { name: "category", value: cat } })}
+                    className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                      active
+                        ? `bg-gradient-to-br ${m.gradient} border-transparent text-white shadow-md scale-[1.03]`
+                        : "bg-white border-slate-200 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50"
+                    }`}
+                  >
+                    <span className="text-lg leading-none">{m.icon}</span>
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Ticket Price (₹)</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            name="ticketPrice"
-            placeholder="0.00"
-            value={formData.ticketPrice}
-            onChange={onChange}
-            required
-            className={inputClass}
-          />
+      {/* ═══ Date & Location ═══ */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-6 h-6 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-sm">📅</span>
+          <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wide">When &amp; Where</h4>
         </div>
-        <div>
-          <label className={labelClass}>Total Tickets</label>
-          <input
-            type="number"
-            min="1"
-            name="totalTickets"
-            placeholder="100"
-            value={formData.totalTickets}
-            onChange={onChange}
-            required
-            className={inputClass}
-          />
+
+        <div className="space-y-4">
+          <div>
+            <label className={labelClass}>Date &amp; Time</label>
+            <div className="relative">
+              <InputIcon>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </InputIcon>
+              <input
+                type="datetime-local"
+                name="date"
+                value={formData.date}
+                onChange={onChange}
+                min={nowLocalMin()}
+                required
+                className={inputClass}
+              />
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Pick from the calendar or type as <span className="font-medium text-gray-500">13-09-2026 10:00</span> — must be in the future.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>Location</label>
+            <div className="relative">
+              <InputIcon>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </InputIcon>
+              <input
+                type="text"
+                name="location"
+                placeholder="Venue / city"
+                value={formData.location}
+                onChange={onChange}
+                required
+                className={inputClass}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+      {/* ═══ Tickets ═══ */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">🎟️</span>
+          <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Tickets</h4>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Price (₹)</label>
+            <div className="relative">
+              <InputIcon>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </InputIcon>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                name="ticketPrice"
+                placeholder="0.00"
+                value={formData.ticketPrice}
+                onChange={onChange}
+                required
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>Total Tickets</label>
+            <div className="relative">
+              <InputIcon>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                </svg>
+              </InputIcon>
+              <input
+                type="number"
+                min="1"
+                name="totalTickets"
+                placeholder="100"
+                value={formData.totalTickets}
+                onChange={onChange}
+                required
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </div>
+
+        {revenue > 0 && (
+          <div className="mt-3 flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold animate-slide-down">
+            <span className="text-base">💰</span>
+            Estimated revenue at full sell-out: ₹{revenue.toLocaleString("en-IN")}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Actions ═══ */}
+      <div className="sticky bottom-0 bg-white -mx-6 -mb-6 px-6 py-4 border-t border-slate-100 rounded-b-3xl flex justify-end gap-3">
         <button
           type="button"
           onClick={onCancel}
+          disabled={submitting}
           className="px-5 py-2.5 rounded-xl border border-slate-200 text-gray-600 text-sm font-semibold hover:bg-slate-50 transition"
         >
           Cancel
@@ -744,9 +932,19 @@ function EventForm({ formData, onChange, onSubmit, submitting, submitLabel, onCa
         <button
           type="submit"
           disabled={submitting}
-          className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-60 text-white rounded-xl text-sm font-bold transition shadow-md shadow-indigo-200"
+          className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition shadow-md shadow-indigo-200 flex items-center gap-2"
         >
-          {submitLabel}
+          {submitting ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              {submitLabel}
+            </>
+          ) : (
+            <>
+              {submitLabel}
+              <span className="text-base leading-none">→</span>
+            </>
+          )}
         </button>
       </div>
     </form>
