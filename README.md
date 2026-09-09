@@ -184,12 +184,52 @@ Booking.findOneAndUpdate(
 
 Only the request that flips `CONFIRMED → CANCELLED` restores the tickets, so tickets can **never be restored twice** (e.g. double-tapped cancel or concurrent cancels). The status change and ticket restore happen in one transaction when a replica set is available.
 
-## Future Deployment (documentation only — do not deploy yet)
+## Deployment
 
-1. **Secrets first**: rotate any credentials that ever existed in repo history; set fresh `MONGO_URI`, `JWT_SECRET`, `CORS_ORIGIN` in the host's environment (never in the repo).
-2. **Backend**: run with a process manager (e.g. PM2) or a container; set `NODE_ENV=production`, `PORT`, and the env vars above. Consider `helmet` defaults already on.
-3. **Frontend**: `npm run build` → serve `frontend/dist` from any static host (nginx, Vercel, Netlify, S3+CloudFront). Set `VITE_API_URL` to the deployed API origin at build time.
-4. **Reverse proxy / TLS**: terminate HTTPS at a proxy; add request logging + monitoring.
-5. **Database**: use Atlas (or a replica set) so booking transactions are active.
-6. **Rate limiting**: adjust `backend/src/middleware/rateLimiter.js` limits for production traffic if needed.
-7. No CI/CD or hosted deployment is configured in this repository.
+### Target architecture
+
+```
+Browser ──► Netlify (static SPA, free) ──► Render (Express API, free) ──► MongoDB Atlas (M0 free)
+```
+
+### 1. MongoDB Atlas
+
+1. Create a cluster (M0 free tier is fine).
+2. **Database Access:** create a dedicated DB user with a strong password (never reuse a previous password that ever appeared in git history).
+3. **Network Access:** add the Railway backend's egress IPs. Railway does not provide one static IP by default — allow `0.0.0.0/0` (with a `VPC_`-free public service) or Railway's documented outbound IP ranges, and keep auth strong.
+4. Copy the connection string (`mongodb+srv://<user>:<password>@<cluster>/<db>?retryWrites=true&w=majority`).
+
+### 2. Render (API)
+
+1. `backend/` is deployed to Render from this repo via the Blueprint in root `render.yaml`.
+2. Render Dashboard → **New → Blueprint service** → select this repo. Render reads `render.yaml` and provisions **eventhub-api**: free web service, Node runtime, `npm install` + `npm start`, healthcheck `/api/health`, root dir `backend/`.
+3. In the service → **Environment**, set (never in the repo):
+   | Variable       | Value |
+   | -------------- | ----- |
+   | `MONGO_URI`    | Atlas `mongodb+srv://…` string |
+   | `JWT_SECRET`   | fresh long random string (or let Render generate it) |
+   | `JWT_EXPIRES_IN`| `7d` (optional) |
+   | `CORS_ORIGIN`  | **only** the deployed Netlify origin, e.g. `https://eventhub.netlify.app` |
+4. Render injects `PORT` automatically. The API binds `process.env.PORT || 5000`.
+5. Note the public URL Render assigns, e.g. `https://eventhub-api.onrender.com`.
+
+### 3. Netlify (frontend)
+
+1. Deploy this repo on Netlify (config in root `netlify.toml`): base `frontend`, build `npm run build`, publish `dist`.
+2. Set `VITE_API_URL=https://eventhub-api.onrender.com/api` as a Netlify **environment variable** — Vite bakes it into the JS bundle at build time.
+3. **SPA routing:** `netlify.toml` includes `/* → /index.html (200)` so React Router paths (`/login`, `/customer`, `/organizer`) work directly. No extra config needed.
+
+### Security checklist before going live
+
+- [ ] Rotate the MongoDB Atlas password and JWT secret (the old values were once committed in git history).
+- [ ] `CORS_ORIGIN` on Render is set to the exact Netlify origin (no `*`).
+- [ ] `VITE_API_URL` on Netlify points to Render's `/api` base URL.
+- [ ] Atlas Network Access allows `0.0.0.0/0` (Render has no static egress IP) with a strong DB password.
+- [ ] Backend uses a replica set / Atlas so booking **transactions** are active.
+- [ ] No `.env`, build output (`dist/`), or `node_modules` committed.
+
+### Local run
+```bash
+cd backend && npm install && cp .env.example .env && npm run dev   # :5000
+cd frontend && npm install && cp .env.example .env && npm run dev  # :5173
+```

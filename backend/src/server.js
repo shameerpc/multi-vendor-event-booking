@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
 const connectDB = require("./config/db");
@@ -42,6 +43,16 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api", bookingRoutes);
+
+// Health check - used by Render, Netlify and monitoring
+app.get("/api/health", (req, res) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({
+    success: dbReady,
+    status: dbReady ? "ok" : "database unavailable",
+    uptime: process.uptime(),
+  });
+});
 
 // Test route
 app.get("/", (req, res) => {

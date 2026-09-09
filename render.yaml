@@ -1,0 +1,32 @@
+# Render Blueprint - deploys the EventHub Express API as a free Web Service.
+#
+# Import: Render Dashboard -> New -> Blueprint service -> select this GitHub
+# repo (branch: DEV). Render reads this file and provisions the service below.
+#
+# Free-tier notes: 750 instance-hours/month per workspace, spins down after
+# 15 min without inbound traffic (wakes on the next request, ~1 min cold start).
+# Ephemeral filesystem - persists nothing. Hobby/prototype tier, not production.
+services:
+  - type: web
+    name: eventhub-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      # Secrets below are NOT committed. Render leaves `sync: false` keys blank
+      # for you to fill in at service creation (MONGO_URI, CORS_ORIGIN), and
+      # `generateValue: true` already created a one-time random JWT_SECRET.
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
