@@ -37,4 +37,8 @@ const bookingSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for the queries used: user bookings, per-event attendees
+bookingSchema.index({ customer: 1, createdAt: -1 });
+bookingSchema.index({ event: 1, bookingStatus: 1 });
+
 module.exports = mongoose.model("Booking", bookingSchema);

@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const dotenv = require("dotenv");
 
 const connectDB = require("./config/db");
@@ -10,13 +11,31 @@ const bookingRoutes = require("./routes/bookingRoutes");
 
 dotenv.config();
 
+const REQUIRED_ENV = ["MONGO_URI", "JWT_SECRET"];
+
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`Missing required environment variable: ${key}`);
+    console.error("Copy backend/.env.example to backend/.env and fill in the values.");
+    process.exit(1);
+  }
+}
+
 const app = express();
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(helmet());
+app.use(
+  cors({
+    origin: (process.env.CORS_ORIGIN || "*")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  })
+);
 app.use(express.json());
 
 // Routes
@@ -45,7 +64,7 @@ app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Internal server error",
+    message: "Internal server error",
   });
 });
 

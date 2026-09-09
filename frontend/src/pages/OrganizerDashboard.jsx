@@ -138,6 +138,7 @@ function OrganizerDashboard() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
     fetchMyEvents();
   }, []);
 
@@ -269,6 +270,38 @@ function OrganizerDashboard() {
 
   const confirmDelete = (event) => {
     setDeletingId(event);
+  };
+
+  // Attendees modal state
+  const [attendeesEvent, setAttendeesEvent] = useState(null);
+  const [attendees, setAttendees] = useState([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+  const [attendeesError, setAttendeesError] = useState("");
+
+  const openAttendees = async (event) => {
+    setAttendeesEvent(event);
+    setAttendees([]);
+    setAttendeesError("");
+    setAttendeesLoading(true);
+    try {
+      const response = await api.get(
+        `/events/organizer/attendees/${event._id}`
+      );
+      setAttendees(response.data.attendees || response.data || []);
+    } catch (err) {
+      console.error(err);
+      setAttendeesError(
+        err.response?.data?.message || "Failed to load attendees"
+      );
+    } finally {
+      setAttendeesLoading(false);
+    }
+  };
+
+  const closeAttendees = () => {
+    setAttendeesEvent(null);
+    setAttendees([]);
+    setAttendeesError("");
   };
 
   const handleDeleteEvent = async () => {
@@ -540,6 +573,15 @@ function OrganizerDashboard() {
                   {/* Actions */}
                   <div className="px-5 pb-5 flex gap-2">
                     <button
+                      onClick={() => openAttendees(event)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-purple-200 text-purple-600 hover:bg-purple-50 text-sm font-semibold transition flex items-center justify-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Attendees
+                    </button>
+                    <button
                       onClick={() => openEditModal(event)}
                       className="flex-1 px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-sm font-semibold transition flex items-center justify-center gap-1.5"
                     >
@@ -633,13 +675,31 @@ function OrganizerDashboard() {
                 type="button"
                 onClick={handleDeleteEvent}
                 disabled={submitting}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-sm font-bold transition shadow-md shadow-rose-200"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-sm font-bold transition shadow-md shadow-rose-200 flex items-center justify-center gap-2"
               >
-                {submitting ? "Deleting..." : "Yes, Delete"}
+                {submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Yes, Delete"
+                )}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════════ ATTENDEES MODAL ══════════ */}
+      {attendeesEvent && (
+        <AttendeesModal
+          event={attendeesEvent}
+          attendees={attendees}
+          loading={attendeesLoading}
+          error={attendeesError}
+          onClose={closeAttendees}
+        />
       )}
     </div>
   );
@@ -948,6 +1008,86 @@ function EventForm({ formData, onChange, onSubmit, submitting, submitLabel, onCa
         </button>
       </div>
     </form>
+  );
+}
+
+/* ─────────── Attendees Modal (loading / empty / error states) ─────────── */
+function AttendeesModal({ event, attendees, loading, error, onClose }) {
+  const meta = CATEGORY_META[event.category] || CATEGORY_META.Other;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-50 py-6 sm:py-10">
+      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col max-h-[92vh] animate-scale-in">
+        {/* Header */}
+        <div className={`shrink-0 relative rounded-t-3xl bg-gradient-to-r ${meta.gradient} px-6 py-5 overflow-hidden`}>
+          <span className="absolute -right-6 -top-8 w-24 h-24 bg-white/10 rounded-full" />
+          <span className="absolute -left-4 -bottom-6 w-20 h-20 bg-white/10 rounded-full" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-white/80 uppercase tracking-wider mb-1">
+                {meta.icon} Confirmed Attendees
+              </p>
+              <h3 className="text-xl font-extrabold text-white line-clamp-1">{event.title}</h3>
+              <p className="text-xs text-white/80 mt-0.5">
+                {loading ? "Loading..." : `${attendees.length} attendee${attendees.length === 1 ? "" : "s"}`}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 shrink-0 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="modal-scroll overflow-y-auto p-6">
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-5 text-center font-medium">
+              {error}
+            </div>
+          ) : attendees.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-5xl mb-3">🧑‍🤝‍🧑</div>
+              <h4 className="font-bold text-gray-900">No attendees yet</h4>
+              <p className="text-sm text-gray-500 mt-1">Confirmed bookings for this event will appear here.</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {attendees.map((attendee) => {
+                const name = attendee.customer?.name || "Unknown";
+                const email = attendee.customer?.email || "—";
+                return (
+                  <li
+                    key={attendee.id}
+                    className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                      {name[0]?.toUpperCase() || "?"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-800 text-sm">{name}</p>
+                      <p className="text-xs text-gray-400 truncate">{email}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        🎟️ {attendee.ticketsBooked} ticket{attendee.ticketsBooked > 1 ? "s" : ""} · ₹
+                        {attendee.totalAmount.toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

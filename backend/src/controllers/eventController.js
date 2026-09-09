@@ -4,6 +4,8 @@ const Booking = require("../models/Booking");
 
 const VALID_CATEGORIES = ["Music", "Tech", "Workshop", "Sports", "Other"];
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // Create Event - Organizer only
 const createEvent = async (req, res) => {
   try {
@@ -120,16 +122,18 @@ const getEvents = async (req, res) => {
     }
 
     if (search) {
+      const escapedSearch = escapeRegExp(String(search));
+
       filter.$or = [
         {
           title: {
-            $regex: search,
+            $regex: escapedSearch,
             $options: "i",
           },
         },
         {
           description: {
-            $regex: search,
+            $regex: escapedSearch,
             $options: "i",
           },
         },
@@ -381,6 +385,63 @@ const deleteEvent = async (req, res) => {
   }
 };
 
+// Get attendees (confirmed bookings) for the organizer's own event
+const getEventAttendees = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid event ID format",
+      });
+    }
+
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    if (event.organizer.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view attendees for this event",
+      });
+    }
+
+    const bookings = await Booking.find({
+      event: eventId,
+      bookingStatus: "CONFIRMED",
+    })
+      .populate("customer", "name email")
+      .sort({ createdAt: 1 });
+
+    return res.status(200).json({
+      success: true,
+      count: bookings.length,
+      attendees: bookings.map((booking) => ({
+        id: booking._id,
+        customer: booking.customer,
+        ticketsBooked: booking.ticketsBooked,
+        totalAmount: booking.totalAmount,
+        bookingStatus: booking.bookingStatus,
+        bookedAt: booking.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Get event attendees error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error fetching event attendees",
+    });
+  }
+};
+
 module.exports = {
   createEvent,
   getEvents,
@@ -388,4 +449,5 @@ module.exports = {
   getMyEvents,
   updateEvent,
   deleteEvent,
+  getEventAttendees,
 };

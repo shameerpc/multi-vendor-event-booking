@@ -86,7 +86,7 @@ const register = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Server error during registration",
+      message: "Unexpected error during registration. Please try again later.",
     });
   }
 };
@@ -137,7 +137,7 @@ const login = async (req, res) => {
       },
       process.env.JWT_SECRET,
       {
-        expiresIn: "7d",
+        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       }
     );
 
@@ -164,7 +164,7 @@ const login = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Server error during login",
+      message: "Unexpected error during login. Please try again later.",
     });
   }
 };
@@ -190,7 +190,7 @@ const getMe = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Server error fetching user profile",
+      message: "Unexpected error fetching user profile. Please try again later.",
     });
   }
 };

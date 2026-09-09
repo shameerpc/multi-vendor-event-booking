@@ -7,6 +7,7 @@ const {
   getMyEvents,
   updateEvent,
   deleteEvent,
+  getEventAttendees,
 } = require("../controllers/eventController");
 
 const {
@@ -26,6 +27,13 @@ router.get(
   protect,
   authorize("ORGANIZER"),
   getMyEvents
+);
+
+router.get(
+  "/organizer/attendees/:eventId",
+  protect,
+  authorize("ORGANIZER"),
+  getEventAttendees
 );
 
 router.post(

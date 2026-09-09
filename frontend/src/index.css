@@ -4,6 +4,17 @@
   --animate-slide-down: slide-down 0.3s ease-out;
   --animate-slide-up: slide-up 0.4s ease-out;
   --animate-scale-in: scale-in 0.25s ease-out;
+  --animate-bounce-slow: bounce-slow 2s ease-in-out infinite;
+}
+
+@keyframes bounce-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes slide-down {

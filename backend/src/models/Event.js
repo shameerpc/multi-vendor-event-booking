@@ -60,4 +60,14 @@ const eventSchema = new mongoose.Schema(
   }
 );
 
+// Cross-field sanity check: never persist more available tickets than total
+eventSchema.path("totalTickets").validate(function (value) {
+  return this.availableTickets <= value;
+}, "availableTickets cannot exceed totalTickets");
+
+// Indexes for the queries used: upcoming list, category filters, my-events
+eventSchema.index({ date: 1 });
+eventSchema.index({ category: 1, date: 1 });
+eventSchema.index({ organizer: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Event", eventSchema);
